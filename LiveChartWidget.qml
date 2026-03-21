@@ -18,21 +18,78 @@ PluginComponent {
     property bool showSeconds: pluginData.showSeconds !== undefined ? pluginData.showSeconds : false
     property int updateIntervalSeconds: pluginData.updateInterval || 3600
     property string browserName: pluginData.browser || "firefox"
+    
+    // Click Action Settings
+    property string cardClickAction: pluginData.cardClickAction || "anime_entry"
+    property string coverClickAction: pluginData.coverClickAction || "anime_entry"
+    property string watchStreamClickAction: pluginData.watchStreamClickAction || "watch_page"
+    property string livechartIconClickAction: pluginData.livechartIconClickAction || "schedule"
+    property int daysToShow: parseInt(pluginData.daysToShow || "7", 10)
+    property int startDayOffset: parseInt(pluginData.startDay || "0", 10)
 
-    // Dynamic today date for default fetching
-    property string todayDateStr: {
+    // Helper for PWA support
+    Process {
+        id: pwaOpener
+    }
+
+    function openUrl(url) {
+        if (!url || url === "") {
+            console.log("[LiveChart] openUrl called with empty URL");
+            return;
+        }
+        console.log("[LiveChart] Opening URL:", url);
+        Qt.openUrlExternally(url);
+    }
+
+    // Calculate targetDate dynamically whenever startDayOffset changes
+    property string targetDate: {
         var d = new Date();
+        d.setDate(d.getDate() + root.startDayOffset);
         var year = d.getFullYear();
         var month = ("0" + (d.getMonth() + 1)).slice(-2);
         var day = ("0" + d.getDate()).slice(-2);
         return year + "-" + month + "-" + day;
     }
-    property string targetDate: todayDateStr
+    
+    // Automatically fetch when targetDate changes (user changes setting)
+    onTargetDateChanged: {
+        if (!root.isLoading && fetchProcess) {
+            root.isLoading = true;
+            root.statusMessage = "Refetching from start date...";
+            fetchProcess.running = true;
+        }
+    }
     
     // Internal state
+    property var fullScheduleData: []
     property var scheduleData: []
     property string statusMessage: "Initializing..."
     property bool isLoading: true
+
+    onDaysToShowChanged: updateScheduleData()
+    onFullScheduleDataChanged: updateScheduleData()
+
+    function updateScheduleData() {
+        if (!root.fullScheduleData || root.fullScheduleData.length === 0) {
+            root.scheduleData = [];
+            return;
+        }
+        const limitedData = root.fullScheduleData.slice(0, root.daysToShow);
+        root.scheduleData = limitedData;
+        let count = 0;
+        let targetIndex = 0;
+        for (let i = 0; i < limitedData.length; i++) {
+            count += limitedData[i].shows.length;
+            if (limitedData[i].day === root.currentDayName) {
+                targetIndex = i;
+            }
+        }
+        root.statusMessage = "Loaded " + count + " active anime for " + limitedData.length + " day(s)";
+        if (scrollTimer) {
+            scrollTimer.focusIndex = targetIndex;
+            scrollTimer.restart();
+        }
+    }
     
     property bool minimumWidth: pluginData.minimumWidth !== undefined ? pluginData.minimumWidth : false
     
@@ -50,8 +107,7 @@ PluginComponent {
     }
 
     // Standard DMS widget capability popout styling
-    // Standard DMS widget capability popout styling
-    popoutWidth: 2100 // Increased from 2000 to give more padding for scrollbars
+    popoutWidth: Math.max(400, 300 * root.daysToShow) // Dynamically resize width per day
 
     Timer {
         id: updateTimer
@@ -97,21 +153,10 @@ PluginComponent {
                 try {
                     const parsed = JSON.parse(output);
                     if (parsed.success) {
-                        root.scheduleData = parsed.data;
-                        let count = 0;
-                        let targetIndex = 0;
-                        for (let i = 0; i < parsed.data.length; i++) {
-                            count += parsed.data[i].shows.length;
-                            if (parsed.data[i].day === root.currentDayName) {
-                                targetIndex = i;
-                            }
-                        }
-                        root.statusMessage = "Loaded " + count + " active anime for next 7 days";
-                        scrollTimer.focusIndex = targetIndex;
-                        scrollTimer.restart();
+                        root.fullScheduleData = parsed.data; // This triggers updateScheduleData() automatically
                     } else {
                         root.statusMessage = parsed.error || "Failed to fetch data";
-                        root.scheduleData = [];
+                        root.fullScheduleData = [];
                     }
                 } catch (e) {
                     root.statusMessage = "Error parsing output from Python script.";
@@ -261,11 +306,13 @@ PluginComponent {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                z: 10
                                 onPressed: (mouse) => iconRipple.trigger(mouse.x, mouse.y)
-                                onClicked: Qt.openUrlExternally("https://www.livechart.me/schedule")
+                                onClicked: {
+                                    root.openUrl(root.livechartIconClickAction === "livechart" ? "https://www.livechart.me" : "https://www.livechart.me/schedule")
+                                }
                             }
                         }
-
                         Column {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
@@ -285,18 +332,93 @@ PluginComponent {
                         }
                     }
 
-                    // Refresh button
+                    // Schedule Navigation Group
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        
+                        DankButton {
+                            text: "<<"
+                            onClicked: root.startDayOffset -= 7
+                            horizontalPadding: 12
+                            height: 32
+                        }
+                        DankButton {
+                            text: "<"
+                            onClicked: root.startDayOffset -= 1
+                            horizontalPadding: 16
+                            height: 32
+                        }
+                        DankButton {
+                            text: "Today"
+                            onClicked: root.startDayOffset = 0
+                            horizontalPadding: 16
+                            height: 32
+                        }
+                        DankButton {
+                            text: ">"
+                            onClicked: root.startDayOffset += 1
+                            horizontalPadding: 16
+                            height: 32
+                        }
+                        DankButton {
+                            text: ">>"
+                            onClicked: root.startDayOffset += 7
+                            horizontalPadding: 12
+                            height: 32
+                        }
+                    }
+
+                    // Refresh Button using DankButton with Custom Animation
                     DankButton {
+                        id: refreshButton
                         anchors.right: parent.right
                         anchors.rightMargin: Theme.spacingM
                         anchors.verticalCenter: parent.verticalCenter
                         width: 40
                         height: 40
                         horizontalPadding: 0
-                        iconName: "refresh"
-                        iconSize: 22
-                        textColor: Theme.primary
                         enableRipple: true
+
+                        // Custom animated icon inside DankButton
+                        DankIcon {
+                            id: refreshIcon
+                            name: "refresh"
+                            size: 22
+                            color: Theme.primary
+                            anchors.centerIn: parent
+
+                            RotationAnimation {
+                                id: rotateEnter
+                                target: refreshIcon
+                                property: "rotation"
+                                from: 0
+                                to: 360
+                                duration: 600
+                                easing.type: Easing.OutQuart
+                            }
+
+                            RotationAnimation {
+                                id: rotateLeave
+                                target: refreshIcon
+                                property: "rotation"
+                                from: 360
+                                to: 0
+                                duration: 600
+                                easing.type: Easing.OutQuart
+                            }
+                        }
+
+                        // Trigger animations using DankButton's hovered state
+                        onHoveredChanged: {
+                            if (hovered) {
+                                rotateLeave.stop();
+                                rotateEnter.start();
+                            } else {
+                                rotateEnter.stop();
+                                rotateLeave.start();
+                            }
+                        }
 
                         onClicked: {
                             root.isLoading = true;
@@ -330,10 +452,11 @@ PluginComponent {
                     
                     delegate: Item {
                         id: dayDelegate
-                        width: (ListView.view.width - (ListView.view.spacing * 6)) / 7
+                        width: (ListView.view.width - (ListView.view.spacing * Math.max(0, root.daysToShow - 1))) / root.daysToShow
                         height: ListView.view.height
                         
                         property int dayIndex: index
+                        readonly property bool isToday: modelData.day === root.currentDayName && dayIndex === -root.startDayOffset
 
                         Column {
                             id: dayColumn
@@ -348,7 +471,7 @@ PluginComponent {
                                 width: parent.width
                                 height: 40
                                 
-                                property bool isToday: modelData.day === root.currentDayName
+                                property bool isToday: dayDelegate.isToday
                                 
                                 color: isToday ? Theme.withAlpha(Theme.buttonBg, 0.7) : Theme.withAlpha(Theme.surfaceVariant, 0.5)
                                 
@@ -358,8 +481,8 @@ PluginComponent {
                                 
                                 topLeftRadius: dayDelegate.dayIndex === 0 ? edgeRadius : innerRadius
                                 bottomLeftRadius: dayDelegate.dayIndex === 0 ? edgeRadius : innerRadius
-                                topRightRadius: dayDelegate.dayIndex === 6 ? edgeRadius : innerRadius
-                                bottomRightRadius: dayDelegate.dayIndex === 6 ? edgeRadius : innerRadius
+                                topRightRadius: dayDelegate.dayIndex === root.daysToShow - 1 ? edgeRadius : innerRadius
+                                bottomRightRadius: dayDelegate.dayIndex === root.daysToShow - 1 ? edgeRadius : innerRadius
 
                                 // Top highlight for 3D effect
                                 Rectangle {
@@ -433,7 +556,7 @@ PluginComponent {
                                 height: 16
                                 anchors.left: parent.left
                                 anchors.leftMargin: dayColumn.timelineX - 1.5 // 1.5 is half of 3px width
-                                color: dayDelegate.dayIndex === 0 ? "#0005FF" : Theme.withAlpha(Theme.surfaceVariantText, 0.2)
+                                color: dayDelegate.isToday ? "#0005FF" : Theme.withAlpha(Theme.surfaceVariantText, 0.2)
                                 radius: 1.5
                             }
 
@@ -470,7 +593,7 @@ PluginComponent {
                                             }
                                         }
 
-                                        if (nowIdx !== -1 && dayDelegate.dayIndex === 0) { // Only scroll for today
+                                        if (nowIdx !== -1 && dayDelegate.isToday) { // Only scroll for today
                                             // Smooth scroll to target
                                             // positionViewAtIndex doesn't animate, so we could calculate Y
                                             // For simplicity, we'll just position it, but user wants "animation"
@@ -493,7 +616,7 @@ PluginComponent {
                                          width: innerListView.width
                                          height: 30
                                          visible: {
-                                             if (dayDelegate.dayIndex !== 0) return false;
+                                             if (!dayDelegate.isToday) return false;
                                              var shows = innerListView.model;
                                              if (!shows || shows.length === 0) return false;
                                              var lastShowTime = parseFloat(shows[shows.length-1].timestamp);
@@ -515,7 +638,7 @@ PluginComponent {
                                          Rectangle {
                                              id: footerDot
                                              width: 8; height: 8; radius: 4
-                                             color: Theme.primary
+                                             color: Theme.withAlpha(Theme.buttonBg, 0.7)
                                              x: innerListView.timelineX - 4
                                              anchors.verticalCenter: parent.verticalCenter
                                              z: 2
@@ -541,7 +664,7 @@ PluginComponent {
                                              width: Math.max(footerTime.implicitWidth + 12, 50)
                                              height: 30
                                              radius: 10
-                                             color: Theme.primary
+                                             color: Theme.withAlpha(Theme.buttonBg, 0.7)
 
                                              StyledText {
                                                  id: footerTime
@@ -553,7 +676,7 @@ PluginComponent {
                                                       }
                                                       return Qt.formatTime(new Date(root.currentTime * 1000), fmt);
                                                   }
-                                                  color: "#FFFFFF"
+                                                  color: Theme.buttonText
                                                  font.bold: true
                                                  font.pixelSize: 10
                                              }
@@ -576,7 +699,7 @@ PluginComponent {
                                              width: parent.width
                                              height: 30
                                              visible: {
-                                                 if (dayDelegate.dayIndex !== 0) return false;
+                                                 if (!dayDelegate.isToday) return false;
                                                  if (!modelData.timestamp) return false;
                                                  var shows = innerListView.model;
                                                  if (!shows) return false;
@@ -602,7 +725,7 @@ PluginComponent {
                                              Rectangle {
                                                  id: nowDot
                                                  width: 8; height: 8; radius: 4
-                                                 color: Theme.primary
+                                                 color: Theme.withAlpha(Theme.buttonBg, 0.7)
                                                  x: innerListView.timelineX - 4
                                                  anchors.verticalCenter: parent.verticalCenter
                                                  z: 3
@@ -628,24 +751,24 @@ PluginComponent {
                                                  width: Math.max(nowTime.implicitWidth + 12, 50)
                                                  height: 20
                                                  radius: 10
-                                                 color: Theme.primary
+                                                 color: Theme.withAlpha(Theme.buttonBg, 0.7)
 
-                                                 StyledText {
-                                                     id: nowTime
-                                                     anchors.centerIn: parent
-                                                     text: {
-                                                         var fmt = root.timeFormat === "24h" ? "HH:mm" : "h:mm AP";
-                                                         if (root.showSeconds) {
-                                                             fmt = root.timeFormat === "24h" ? "HH:mm:ss" : "h:mm:ss AP";
-                                                         }
-                                                         return Qt.formatTime(new Date(root.currentTime * 1000), fmt);
-                                                     }
-                                                     color: "#FFFFFF"
-                                                     font.bold: true
-                                                     font.pixelSize: 12
-                                                 }
-                                             }
-                                         }
+                                                  StyledText {
+                                                      id: nowTime
+                                                      anchors.centerIn: parent
+                                                      text: {
+                                                          var fmt = root.timeFormat === "24h" ? "HH:mm" : "h:mm AP";
+                                                          if (root.showSeconds) {
+                                                              fmt = root.timeFormat === "24h" ? "HH:mm:ss" : "h:mm:ss AP";
+                                                          }
+                                                          return Qt.formatTime(new Date(root.currentTime * 1000), fmt);
+                                                      }
+                                                      color: Theme.buttonText
+                                                      font.bold: true
+                                                      font.pixelSize: 12
+                                                  }
+                                              }
+                                          }
 
                                          // Vertical Gap between cards
                                          Rectangle {
@@ -655,7 +778,7 @@ PluginComponent {
                                              anchors.left: parent.left
                                              anchors.leftMargin: innerListView.timelineX - 1.5
                                              anchors.bottomMargin: -2 // Bleed into card
-                                             color: dayDelegate.dayIndex === 0 ? "#0005FF" : Theme.withAlpha(Theme.surfaceVariantText, 0.2)
+                                             color: dayDelegate.isToday ? "#0005FF" : Theme.withAlpha(Theme.surfaceVariantText, 0.2)
                                              visible: !nowMarker.visible
                                              z: -1
                                          }
@@ -682,13 +805,17 @@ PluginComponent {
                                                 id: cardMouseArea
                                                 anchors.fill: parent
                                                 hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
+                                                cursorShape: root.cardClickAction === "none" ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                                // No z-index explicitly, just defined before the layouts 
+                                                // so buttons inside layouts can take precedence.
                                                 onPressed: (mouse) => {
-                                                    cardRipple.trigger(mouse.x, mouse.y);
+                                                    if (root.cardClickAction !== "none") cardRipple.trigger(mouse.x, mouse.y);
                                                 }
                                                 onClicked: {
-                                                    if (modelData.animeLink) {
-                                                        Qt.openUrlExternally(modelData.animeLink)
+                                                    if (root.cardClickAction === "anime_entry" && modelData.animeLink) {
+                                                        root.openUrl(modelData.animeLink)
+                                                    } else if (root.cardClickAction === "watch_page" && modelData.watchLink) {
+                                                        root.openUrl(modelData.watchLink)
                                                     }
                                                 }
                                             }
@@ -703,25 +830,35 @@ PluginComponent {
                                                 Layout.fillWidth: true
                                                 spacing: 4
 
-                                                StyledText {
-                                                    id: timeText
-                                                    text: {
-                                                        if (modelData.timestamp) {
-                                                            var d = new Date(modelData.timestamp * 1000);
-                                                            if (root.timeFormat === "24h") {
-                                                                return Qt.formatTime(d, "HH:mm");
-                                                            } else {
-                                                                return Qt.formatTime(d, "h:mm AP");
+                                                // Time Chip
+                                                Rectangle {
+                                                    id: timeChip
+                                                    Layout.preferredWidth: timeText.implicitWidth + 12
+                                                    Layout.preferredHeight: 18
+                                                    color: dayDelegate.isToday ? Theme.withAlpha(Theme.buttonBg, 0.7) : Theme.withAlpha(Theme.surfaceVariant, 0.5)
+                                                    radius: 9
+                                                    // Center on timelineX (40 - 12px margin = 28)
+                                                    Layout.leftMargin: (dayColumn.timelineX - 12) - (width / 2)
+
+                                                    StyledText {
+                                                        id: timeText
+                                                        anchors.centerIn: parent
+                                                        text: {
+                                                            if (modelData.timestamp) {
+                                                                var d = new Date(modelData.timestamp * 1000);
+                                                                if (root.timeFormat === "24h") {
+                                                                    return Qt.formatTime(d, "HH:mm");
+                                                                } else {
+                                                                    return Qt.formatTime(d, "h:mm AP");
+                                                                }
                                                             }
+                                                            return modelData.time;
                                                         }
-                                                        return modelData.time;
+                                                        font.pixelSize: 9
+                                                        font.weight: Font.Black
+                                                        font.capitalization: Font.AllUppercase
+                                                        color: dayDelegate.isToday ? Theme.buttonText : Theme.surfaceVariantText
                                                     }
-                                                    font.pixelSize: 10
-                                                    font.weight: Font.ExtraBold
-                                                    font.capitalization: Font.AllUppercase
-                                                    color: Theme.primary
-                                                    // Strictly centered on timelineX (40 - 12px margin = 28)
-                                                    Layout.leftMargin: (dayColumn.timelineX - 12) - (implicitWidth / 2)
                                                 }
 
                                                 StyledText {
@@ -740,39 +877,83 @@ PluginComponent {
                                                     Layout.fillWidth: !countdownText.visible
                                                 }
 
-                                                 // Bookmark Button (Custom 24px)
-                                                 Item {
-                                                     id: bookmarkItem
-                                                     Layout.preferredWidth: 24
-                                                     Layout.preferredHeight: 24
-                                                     // Mirrored margin: exactly match timeText's left margin
-                                                     Layout.rightMargin: (dayColumn.timelineX - 12) - (timeText.implicitWidth / 2)
+                                                  // Bookmark & Progress Container
+                                                  RowLayout {
+                                                      id: statusContainer
+                                                      spacing: 4
+                                                      Layout.rightMargin: (dayColumn.timelineX - 12) - (timeText.implicitWidth / 2)
 
-                                                     DankIcon {
-                                                         name: "bookmark"
-                                                         filled: false
-                                                         size: 20
-                                                         color: bookmarkMA.containsMouse ? Theme.primary : Theme.surfaceVariantText
-                                                         opacity: bookmarkMA.containsMouse ? 1.0 : 0.6
-                                                         anchors.centerIn: parent
-                                                     }
 
-                                                     DankRipple {
-                                                         id: bookmarkRipple
-                                                         cornerRadius: 12
-                                                         rippleColor: Theme.primary
-                                                     }
 
-                                                     MouseArea {
-                                                         id: bookmarkMA
-                                                         anchors.fill: parent
-                                                         hoverEnabled: true
-                                                         cursorShape: Qt.PointingHandCursor
-                                                         onPressed: (mouse) => {
-                                                             bookmarkRipple.trigger(mouse.x, mouse.y);
-                                                         }
-                                                     }
-                                                 }
+                                                      // Bookmark Button
+                                                      Item {
+                                                          id: bookmarkItem
+                                                          width: 24
+                                                          height: 24
+                                                          Layout.alignment: Qt.AlignVCenter
+
+                                                          property color statusColor: {
+                                                                switch(modelData.libraryStatus) {
+                                                                    case "watching": return "#4CAF50"; // Green
+                                                                    case "rewatching": return "#4CAF50"; // Green
+                                                                    case "completed": return "#6B89C9"; // Blue
+                                                                    case "planning": return "#9C27B0"; // Purple
+                                                                    case "considering": return "#FFC107"; // Gold/Yellow
+                                                                    case "paused": return "#FE8E14"; // Orange
+                                                                    case "dropped": return "#AC675D"; // Reddish-Brown
+                                                                    case "skipping": return "#F44336"; // Red
+                                                                    case "in-list": return Theme.primary;
+                                                                    default: return Theme.surfaceVariantText;
+                                                                }
+                                                          }
+
+                                                          property string iconName: modelData.libraryStatus === "none" ? "unmarked" : modelData.libraryStatus
+
+                                                          Image {
+                                                              id: statusIcon
+                                                              source: "file:///home/JD/Downloads/Projects/LiveChartPlugin/icons/" + bookmarkItem.iconName + ".svg"
+                                                              width: 20
+                                                              height: 20
+                                                              anchors.centerIn: parent
+                                                              anchors.verticalCenterOffset: -1 // Shift up for visual balance in bookmark
+                                                              visible: modelData.libraryStatus !== "none" || bookmarkMA.containsMouse
+                                                              smooth: true
+                                                              mipmap: true
+                                                              opacity: bookmarkMA.containsMouse ? 1.0 : 0.8
+                                                          }
+
+                                                          // Default bookmark icon for "none" status if hovered (optional, fallback)
+                                                          DankIcon {
+                                                              visible: modelData.libraryStatus === "none" && !bookmarkMA.containsMouse
+                                                              name: "bookmark-outline"
+                                                              size: 20
+                                                              color: Theme.surfaceVariantText
+                                                              opacity: 0.6
+                                                              anchors.centerIn: parent
+                                                          }
+
+                                                          DankRipple {
+                                                              id: bookmarkRipple
+                                                              cornerRadius: 12
+                                                              rippleColor: Theme.primary
+                                                          }
+
+                                                          MouseArea {
+                                                              id: bookmarkMA
+                                                              anchors.fill: parent
+                                                              hoverEnabled: true
+                                                              cursorShape: Qt.PointingHandCursor
+                                                              onPressed: (mouse) => {
+                                                                  bookmarkRipple.trigger(mouse.x, mouse.y);
+                                                              }
+                                                              onClicked: {
+                                                                  if (modelData.animeLink) {
+                                                                      root.openUrl(modelData.animeLink)
+                                                                  }
+                                                              }
+                                                          }
+                                                      }
+                                                  }
                                             }
 
                                             // Edge-to-Edge Unified Separator
@@ -803,133 +984,206 @@ PluginComponent {
                                             }
 
                                             // Main Content
-                                            RowLayout {
+                                            // Main Content Container (Prevents layout interference between MouseArea and Layout children)
+                                            Item {
                                                 Layout.fillWidth: true
                                                 Layout.fillHeight: true
-                                                spacing: 12
 
-                                                // Poster Area
-                                                Item {
-                                                    Layout.preferredWidth: 80 // Increased
-                                                    Layout.preferredHeight: 110 // Increased
-                                                    Layout.alignment: Qt.AlignTop
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    spacing: 12
 
-                                                    Rectangle {
-                                                        id: posterMask
-                                                        anchors.fill: parent
-                                                        radius: 12
-                                                        visible: false
-                                                    }
-
+                                                    // Cover Area (Poster)
                                                     Item {
-                                                        anchors.fill: parent
-                                                        layer.enabled: true
-                                                        layer.effect: OpacityMask {
-                                                            maskSource: posterMask
-                                                        }
-
-                                                        Image {
-                                                            anchors.fill: parent
-                                                            source: modelData.image || ""
-                                                            fillMode: Image.PreserveAspectCrop
-                                                        }
-                                                    }
-
-                                                    // Watch Button
-                                                    Rectangle {
-                                                        anchors.horizontalCenter: parent.horizontalCenter
-                                                        anchors.bottom: parent.bottom
-                                                        anchors.bottomMargin: -10
-                                                        width: 28
-                                                        height: 28
-                                                        radius: 14
-                                                        color: "white"
-                                                        border.width: 3
-                                                        border.color: Qt.rgba(Theme.surfaceContainer.r, Theme.surfaceContainer.g, Theme.surfaceContainer.b, 1)
-                                                        visible: modelData.watchLink !== ""
-                                                        z: 10
-
-                                                        DankRipple {
-                                                            id: watchRipple
-                                                            cornerRadius: parent.radius
-                                                            rippleColor: Theme.primary
-                                                        }
+                                                        id: coverArea
+                                                        Layout.preferredWidth: 80 
+                                                        Layout.preferredHeight: 110 
+                                                        Layout.alignment: Qt.AlignTop
 
                                                         Rectangle {
-                                                            id: watchIconMask
+                                                            id: coverMask
                                                             anchors.fill: parent
-                                                            anchors.margins: 4
-                                                            radius: width / 2
+                                                            radius: 12
                                                             visible: false
                                                         }
 
                                                         Item {
                                                             anchors.fill: parent
-                                                            anchors.margins: 4
                                                             layer.enabled: true
                                                             layer.effect: OpacityMask {
-                                                                maskSource: watchIconMask
+                                                                maskSource: coverMask
                                                             }
 
                                                             Image {
-                                                                id: watchIcon
                                                                 anchors.fill: parent
-                                                                // Robust favicon fallback
-                                                                source: modelData.sourceIcon || (modelData.siteDomain ? "https://www.google.com/s2/favicons?domain=" + modelData.siteDomain + "&sz=64" : "")
-                                                                visible: source.toString() !== ""
+                                                                source: modelData.image || ""
+                                                                fillMode: Image.PreserveAspectCrop
                                                             }
                                                         }
 
-                                                        DankIcon {
-                                                            anchors.centerIn: parent
-                                                            name: "link"
-                                                            size: 16
-                                                            color: Theme.primary
-                                                            visible: watchIcon.source.toString() === ""
-                                                        }
-
+                                                        // Cover Image MouseArea
+                                                        // This sits exactly on the cover image and beneath the watch button.
                                                         MouseArea {
+                                                            id: coverImageMA
                                                             anchors.fill: parent
+                                                            enabled: root.coverClickAction !== "none"
                                                             cursorShape: Qt.PointingHandCursor
-                                                            onPressed: (mouse) => {
-                                                                watchRipple.trigger(mouse.x, mouse.y);
-                                                            }
                                                             onClicked: {
-                                                                Qt.openUrlExternally(modelData.watchLink);
+                                                                if (root.coverClickAction === "anime_entry" && modelData.animeLink) {
+                                                                    root.openUrl(modelData.animeLink)
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Watch Button
+                                                        Rectangle {
+                                                            id: watchBtn
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            anchors.bottom: parent.bottom
+                                                            anchors.bottomMargin: -10
+                                                            width: 28
+                                                            height: 28
+                                                            radius: 14
+                                                            color: "white"
+                                                            border.width: 3
+                                                            border.color: Qt.rgba(Theme.surfaceContainer.r, Theme.surfaceContainer.g, Theme.surfaceContainer.b, 1)
+                                                            visible: modelData.watchLink !== ""
+                                                            z: 10 // Ensure it's above cover click handler
+
+                                                            DankRipple {
+                                                                id: watchRipple
+                                                                cornerRadius: parent.radius
+                                                                rippleColor: Theme.primary
+                                                            }
+
+                                                            Rectangle {
+                                                                id: watchIconMask
+                                                                anchors.fill: parent
+                                                                anchors.margins: 4
+                                                                radius: width / 2
+                                                                visible: false
+                                                            }
+
+                                                            Item {
+                                                                anchors.fill: parent
+                                                                anchors.margins: 4
+                                                                layer.enabled: true
+                                                                layer.effect: OpacityMask {
+                                                                    maskSource: watchIconMask
+                                                                }
+
+                                                                Image {
+                                                                    id: watchIcon
+                                                                    anchors.fill: parent
+                                                                    // Robust favicon fallback
+                                                                    source: modelData.sourceIcon || (modelData.siteDomain ? "https://www.google.com/s2/favicons?domain=" + modelData.siteDomain + "&sz=64" : "")
+                                                                    visible: source.toString() !== ""
+                                                                }
+                                                            }
+
+                                                            DankIcon {
+                                                                anchors.centerIn: parent
+                                                                name: "link"
+                                                                size: 16
+                                                                color: Theme.withAlpha(Theme.buttonBg, 0.7)
+                                                                visible: watchIcon.source.toString() === ""
+                                                            }
+
+                                                            MouseArea {
+                                                                id: watchStreamMA
+                                                                anchors.fill: parent
+                                                                cursorShape: root.watchStreamClickAction === "none" ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                                                onPressed: (mouse) => {
+                                                                    if (root.watchStreamClickAction !== "none") watchRipple.trigger(mouse.x, mouse.y);
+                                                                }
+                                                                onClicked: {
+                                                                    if (root.watchStreamClickAction === "watch_page" && modelData.watchLink) {
+                                                                        root.openUrl(modelData.watchLink);
+                                                                    }
+                                                                    // Click is consumed here
+                                                                }
                                                             }
                                                         }
                                                     }
-                                                }
 
-                                                // Info Content
-                                                ColumnLayout {
-                                                    Layout.fillWidth: true
-                                                    Layout.alignment: Qt.AlignTop
-                                                    spacing: 4
-
-                                                    StyledText {
+                                                    // Info Content
+                                                    ColumnLayout {
                                                         Layout.fillWidth: true
-                                                        text: modelData.title
-                                                        font.pixelSize: Theme.fontSizeMedium
-                                                        font.weight: Font.DemiBold
-                                                        color: Theme.surfaceText
-                                                        wrapMode: Text.Wrap
-                                                        maximumLineCount: 2
-                                                        elide: Text.ElideRight
-                                                    }
+                                                        Layout.alignment: Qt.AlignTop
+                                                        spacing: 4
 
-                                                    StyledText {
-                                                        Layout.fillWidth: true
-                                                        text: modelData.episodeInfo
-                                                        font.pixelSize: Theme.fontSizeSmall
-                                                        color: Theme.surfaceVariantText
-                                                        opacity: 0.8
-                                                        wrapMode: Text.Wrap
-                                                        elide: Text.ElideRight
-                                                    }
-                                                } // ColumnLayout (Info)
-                                            } // RowLayout (Main Content)
+                                                        StyledText {
+                                                            Layout.fillWidth: true
+                                                            text: modelData.title
+                                                            font.pixelSize: Theme.fontSizeMedium
+                                                            font.weight: Font.DemiBold
+                                                            color: Theme.surfaceText
+                                                            wrapMode: Text.Wrap
+                                                            maximumLineCount: 2
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        StyledText {
+                                                            Layout.fillWidth: true
+                                                            text: modelData.episodeInfo
+                                                            font.pixelSize: Theme.fontSizeSmall
+                                                            color: Theme.surfaceVariantText
+                                                            opacity: 0.8
+                                                            wrapMode: Text.Wrap
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    } // ColumnLayout (Info)
+                                                } // RowLayout (Main Content)
+
+
+                                            } // Item (Main Content Container)
                                         } // ColumnLayout (Card)
+
+                                        // Mark as Watched Button
+                                        Rectangle {
+                                            id: markWatchedBtn
+                                            width: 24
+                                            height: 24
+                                            radius: 12
+                                            color: "white"
+                                            border.width: 3
+                                            border.color: Qt.rgba(Theme.surfaceContainer.r, Theme.surfaceContainer.g, Theme.surfaceContainer.b, 1)
+                                            visible: modelData.hasProgress
+                                            z: 30
+
+                                            // EDIT POSITION HERE:
+                                            anchors.right: parent.right
+                                            anchors.bottom: parent.bottom
+                                            anchors.rightMargin: 12
+                                            anchors.bottomMargin: 12
+
+                                            DankIcon {
+                                                anchors.centerIn: parent
+                                                name: "check"
+                                                size: 14
+                                                color: Theme.isDark ? Theme.primary : "black"
+                                            }
+
+                                            DankRipple {
+                                                id: markRipple
+                                                cornerRadius: parent.radius
+                                                rippleColor: Theme.primary
+                                            }
+
+                                             MouseArea {
+                                                 anchors.fill: parent
+                                                 enabled: root.coverClickAction !== "none"
+                                                 cursorShape: Qt.PointingHandCursor
+                                                 onPressed: (mouse) => {
+                                                     markRipple.trigger(mouse.x, mouse.y);
+                                                 }
+                                                 onClicked: {
+                                                     if (root.coverClickAction === "anime_entry" && modelData.animeLink) {
+                                                         root.openUrl(modelData.animeLink)
+                                                     }
+                                                 }
+                                             }
+                                        }
                                     } // Rectangle (cardRect)
                                 } // Column (Show Column)
                             } // Item (Inner delegate)

@@ -9,22 +9,6 @@ PluginSettings {
     id: root
     pluginId: "liveChartSchedule"
 
-    StyledText {
-        width: parent.width
-        text: "LiveChart Schedule"
-        font.pixelSize: Theme.fontSizeLarge
-        font.weight: Font.Bold
-        color: Theme.surfaceText
-    }
-
-    StyledText {
-        width: parent.width
-        text: "Displays LiveChart anime schedule data pulled from a local browser session."
-        font.pixelSize: Theme.fontSizeSmall
-        color: Theme.surfaceVariantText
-        wrapMode: Text.WordWrap
-    }
-
     SelectionSetting {
         settingKey: "browser"
         label: "Browser Session"
@@ -60,5 +44,77 @@ PluginSettings {
         label: "Update Interval (s)"
         description: "How often to refresh the schedule."
         defaultValue: "3600"
+    }
+
+    SelectionSetting {
+        settingKey: "daysToShow"
+        label: "Days to Show"
+        description: "Number of days of schedule to display."
+        options: [
+            { label: "1 Day", value: "1" },
+            { label: "2 Days", value: "2" },
+            { label: "3 Days", value: "3" },
+            { label: "5 Days", value: "5" },
+            { label: "7 Days", value: "7" }
+        ]
+        defaultValue: "7"
+    }
+
+    SelectionSetting {
+        settingKey: "startDay"
+        label: "Start Day"
+        description: "Which day the schedule should start from."
+        options: [
+            { label: "Day Before Yesterday", value: "-2" },
+            { label: "Yesterday", value: "-1" },
+            { label: "Today", value: "0" },
+            { label: "Tomorrow", value: "1" }
+        ]
+        defaultValue: "0"
+    }
+
+    SelectionSetting {
+        settingKey: "cardClickAction"
+        label: "Anime Card"
+        description: "Action when clicking the background of an anime card."
+        options: [
+            { label: "Disable", value: "none" },
+            { label: "Watch Page", value: "watch_page" },
+            { label: "Anime Entry", value: "anime_entry" }
+        ]
+        defaultValue: "anime_entry"
+    }
+
+    SelectionSetting {
+        settingKey: "coverTitleClickAction"
+        label: "Cover"
+        description: "Action when clicking the cover image of an anime."
+        options: [
+            { label: "Disable", value: "none" },
+            { label: "Anime Entry", value: "anime_entry" }
+        ]
+        defaultValue: "anime_entry"
+    }
+
+    SelectionSetting {
+        settingKey: "watchStreamClickAction"
+        label: "Watch Stream"
+        description: "Action when clicking the source favicon/link."
+        options: [
+            { label: "Disable", value: "none" },
+            { label: "Watch Page", value: "watch_page" }
+        ]
+        defaultValue: "watch_page"
+    }
+
+    SelectionSetting {
+        settingKey: "livechartIconClickAction"
+        label: "LiveChart.me Icon"
+        description: "Action when clicking the top LiveChart logo."
+        options: [
+            { label: "Schedule", value: "schedule" },
+            { label: "LiveChart.me", value: "livechart" }
+        ]
+        defaultValue: "schedule"
     }
 }
