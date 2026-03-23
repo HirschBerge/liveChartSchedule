@@ -55,8 +55,9 @@ PluginComponent {
     onTargetDateChanged: {
         if (!root.isLoading && fetchProcess) {
             root.isLoading = true;
-            root.statusMessage = "Refetching from start date...";
-            fetchProcess.running = true;
+            root.fullScheduleData = []; // Clear current data instantly to show skeleton
+            root.updateScheduleData();
+            root.triggerFetch("Refetching from start date...");
         }
     }
     
@@ -90,6 +91,21 @@ PluginComponent {
             scrollTimer.restart();
         }
     }
+
+    function triggerFetch(message) {
+        if (!fetchProcess) return;
+        if (message) {
+            root.statusMessage = message;
+        }
+        // Forcibly re-evaluate and assign command array to avoid QML binding race conditions
+        fetchProcess.command = [
+            "python3",
+            Qt.resolvedUrl("fetch_livechart.py").toString().replace("file://", ""),
+            root.targetDate,
+            root.browserName
+        ];
+        fetchProcess.running = true;
+    }
     
     property bool minimumWidth: pluginData.minimumWidth !== undefined ? pluginData.minimumWidth : false
     
@@ -117,8 +133,7 @@ PluginComponent {
         triggeredOnStart: true
         onTriggered: {
             root.isLoading = true;
-            root.statusMessage = "Fetching schedule...";
-            fetchProcess.running = true;
+            root.triggerFetch("Fetching schedule...");
         }
     }
 
@@ -332,40 +347,113 @@ PluginComponent {
                         }
                     }
 
-                    // Schedule Navigation Group
+                    // Custom Navigation Group explicitly mirroring exact DankButtonGroup 
+                    // dimensions, spacings, and physics, with targeted highlighting and animation.
                     Row {
                         anchors.centerIn: parent
-                        spacing: 4
+                        spacing: Theme.spacingXS
                         
-                        DankButton {
-                            text: "<<"
-                            onClicked: root.startDayOffset -= 7
-                            horizontalPadding: 12
-                            height: 32
-                        }
-                        DankButton {
-                            text: "<"
-                            onClicked: root.startDayOffset -= 1
-                            horizontalPadding: 16
-                            height: 32
-                        }
-                        DankButton {
-                            text: "Today"
-                            onClicked: root.startDayOffset = 0
-                            horizontalPadding: 16
-                            height: 32
-                        }
-                        DankButton {
-                            text: ">"
-                            onClicked: root.startDayOffset += 1
-                            horizontalPadding: 16
-                            height: 32
-                        }
-                        DankButton {
-                            text: ">>"
-                            onClicked: root.startDayOffset += 7
-                            horizontalPadding: 12
-                            height: 32
+                        Repeater {
+                            model: [
+                                { text: "<<", action: () => root.triggerFetch(), offset: -7 },
+                                { text: "<", action: () => root.triggerFetch(), offset: -1 },
+                                { text: "Today", isTodayBtn: true, action: () => root.triggerFetch(), offset: 0 },
+                                { text: ">", action: () => root.triggerFetch(), offset: 1 },
+                                { text: ">>", action: () => root.triggerFetch(), offset: 7 }
+                            ]
+                            
+                            Rectangle {
+                                id: navBtn
+                                property bool isFirst: index === 0
+                                property bool isLast: index === 4
+                                property bool isTodayAtDefault: (modelData.isTodayBtn === true) && (root.startDayOffset === parseInt(pluginData.startDay || "0", 10))
+                                
+                                width: Math.max(btnText.implicitWidth + Theme.spacingL * 2, 64) + (isTodayAtDefault ? 4 : 0)
+                                height: 40
+                                
+                                // Pure base color mimicking DankButtonGroup default
+                                color: isTodayAtDefault ? Theme.primary : Theme.surfaceVariant
+                                
+                                topLeftRadius: (isFirst || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                bottomLeftRadius: (isFirst || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                topRightRadius: (isLast || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                bottomRightRadius: (isLast || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                
+                                Behavior on width { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on topLeftRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on bottomLeftRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on topRightRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on bottomRightRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on color { ColorAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                
+                                // Overlay stateLayer directly extracted from DankButtonGroup source code 
+                                // perfectly enforcing standardized interaction highlights.
+                                Rectangle {
+                                    id: stateLayer
+                                    anchors.fill: parent
+                                    topLeftRadius: parent.topLeftRadius
+                                    bottomLeftRadius: parent.bottomLeftRadius
+                                    topRightRadius: parent.topRightRadius
+                                    bottomRightRadius: parent.bottomRightRadius
+                                    color: {
+                                        if (navHover.pressed) return isTodayAtDefault ? Theme.buttonPressed : Theme.surfaceTextHover;
+                                        if (navHover.containsMouse) return isTodayAtDefault ? Theme.buttonHover : Theme.surfaceTextHover;
+                                        return "transparent";
+                                    }
+                                    Behavior on color { ColorAnimation { duration: Theme.shorterDuration; easing.type: Theme.standardEasing } }
+                                }
+                                
+                                DankRipple {
+                                    id: navRipple
+                                    cornerRadius: isFirst || isLast || isTodayAtDefault ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                    rippleColor: isTodayAtDefault ? Theme.onPrimary : Theme.surfaceVariantText
+                                }
+                                
+                                Item {
+                                    anchors.fill: parent
+                                    
+                                    StyledText {
+                                        id: btnText
+                                        text: modelData.text
+                                        font.pixelSize: Theme.fontSizeMedium
+                                        anchors.centerIn: parent
+                                        color: isTodayAtDefault ? Theme.onPrimary : Theme.surfaceVariantText
+                                        font.weight: isTodayAtDefault ? Font.Medium : Font.Normal
+                                        
+                                        // Tactile scale zoom exclusively for the Today anchor
+                                        scale: (navHover.containsMouse && modelData.isTodayBtn) ? 1.1 : 1.0
+                                        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                                        
+                                        transform: Translate {
+                                            id: iconTranslate
+                                            x: 0
+                                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                                        }
+                                    }
+                                }
+                                
+                                MouseArea {
+                                    id: navHover
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: mouse => navRipple.trigger(mouse.x, mouse.y)
+                                    onClicked: {
+                                        if (modelData.isTodayBtn) {
+                                            root.startDayOffset = parseInt(pluginData.startDay || "0", 10);
+                                        } else {
+                                            root.startDayOffset += modelData.offset;
+                                        }
+                                    }
+                                    onEntered: {
+                                        if (modelData.text === "<" || modelData.text === "<<") iconTranslate.x = -4;
+                                        if (modelData.text === ">" || modelData.text === ">>") iconTranslate.x = 4;
+                                    }
+                                    onExited: {
+                                        iconTranslate.x = 0;
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -422,9 +510,76 @@ PluginComponent {
 
                         onClicked: {
                             root.isLoading = true;
-                            root.statusMessage = "Fetching schedule...";
-                            fetchProcess.running = true;
+                            root.fullScheduleData = []; // Clear current data instantly to show skeleton
+                            root.updateScheduleData();
+                            root.triggerFetch("Fetching schedule...");
                         }
+                    }
+                }
+
+                // Skeleton Loading State
+                Row {
+                    id: skeletonLoader
+                    visible: root.isLoading
+                    width: parent.width
+                    height: 540
+                    spacing: 12
+                    
+                    Repeater {
+                        model: root.daysToShow
+                        
+                        Column {
+                            width: (skeletonLoader.width - (skeletonLoader.spacing * Math.max(0, root.daysToShow - 1))) / root.daysToShow
+                            height: parent.height
+                            spacing: 0
+                            
+                            // Skeleton Header
+                            Rectangle {
+                                width: parent.width
+                                height: 40
+                                color: Theme.withAlpha(Theme.surfaceVariant, 0.4)
+                                radius: Theme.cornerRadius
+                            }
+                            
+                            // Skeleton Cards Pattern
+                            Repeater {
+                                model: 3
+                                
+                                Item {
+                                    width: parent.width
+                                    height: 205 // Exact height equivalent: 16px gap + 190px card
+                                    
+                                    // Gap line precisely mirroring live card offsets
+                                    Rectangle {
+                                        width: 3
+                                        height: 16
+                                        color: Theme.withAlpha(Theme.surfaceVariantText, 0.1)
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 38.5 // Aligns with vertical timeline axis
+                                    }
+                                    
+                                    // True dimension dummy card
+                                    Rectangle {
+                                        anchors.top: parent.top
+                                        anchors.topMargin: 16
+                                        width: parent.width - 16 // Accurately reserves 16px scrollbar gutter
+                                        height: 190
+                                        radius: 20
+                                        color: Theme.withAlpha(Theme.surfaceVariant, 0.2)
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.surfaceVariantText, 0.1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Global Pulse Animation
+                    SequentialAnimation on opacity {
+                        running: root.isLoading
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 0.3; duration: 800; easing.type: Easing.InOutQuad }
+                        NumberAnimation { to: 1.0; duration: 800; easing.type: Easing.InOutQuad }
                     }
                 }
 
@@ -474,6 +629,7 @@ PluginComponent {
                                 property bool isToday: dayDelegate.isToday
                                 
                                 color: isToday ? Theme.withAlpha(Theme.buttonBg, 0.7) : Theme.withAlpha(Theme.surfaceVariant, 0.5)
+                                Behavior on color { ColorAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
                                 
                                 // Selective corner rounding for pill effect
                                 property int edgeRadius: Theme.cornerRadius
@@ -494,20 +650,21 @@ PluginComponent {
                                     topLeftRadius: parent.topLeftRadius
                                     topRightRadius: parent.topRightRadius
                                 }
-
-                                // Subtle bottom shadow for depth
+                                
+                                // Shared component-level native interaction layer
                                 Rectangle {
-                                    anchors.top: parent.bottom
-                                    width: parent.width
-                                    height: 8
-                                    z: -1 
+                                    id: dayStateLayer
+                                    anchors.fill: parent
+                                    topLeftRadius: parent.topLeftRadius
                                     bottomLeftRadius: parent.bottomLeftRadius
+                                    topRightRadius: parent.topRightRadius
                                     bottomRightRadius: parent.bottomRightRadius
-                                    gradient: Gradient {
-                                        GradientStop { position: 0.0; color: Theme.withAlpha("#000000", 0.08) }
-                                        GradientStop { position: 0.3; color: Theme.withAlpha("#000000", 0.03) }
-                                        GradientStop { position: 1.0; color: "transparent" }
+                                    color: {
+                                        if (headerMouse.pressed) return headerSegment.isToday ? Theme.buttonPressed : Theme.surfaceTextHover;
+                                        if (headerMouse.containsMouse) return headerSegment.isToday ? Theme.buttonHover : Theme.surfaceTextHover;
+                                        return "transparent";
                                     }
+                                    Behavior on color { ColorAnimation { duration: Theme.shorterDuration; easing.type: Theme.standardEasing } }
                                 }
 
                                 DankRipple {
@@ -539,7 +696,9 @@ PluginComponent {
                                 }
                                 
                                 MouseArea {
+                                    id: headerMouse
                                     anchors.fill: parent
+                                    hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onPressed: (mouse) => {
                                         headerRipple.trigger(mouse.x, mouse.y);
@@ -1148,7 +1307,7 @@ PluginComponent {
                                             color: "white"
                                             border.width: 3
                                             border.color: Qt.rgba(Theme.surfaceContainer.r, Theme.surfaceContainer.g, Theme.surfaceContainer.b, 1)
-                                            visible: modelData.hasProgress
+                                            visible: !modelData.isWatched
                                             z: 30
 
                                             // EDIT POSITION HERE:

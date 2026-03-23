@@ -301,27 +301,54 @@ def get_livechart_data(date_str, browser_type="firefox"):
                             print(f"DEBUG: Unknown library status '{library_status}' for {title}", file=sys.stderr)
 
                     # Episode Progress Extraction
-                    current_progress = 0
-                    progress_target = 0
+                    card_ep_num = 0
+                    if ep_label:
+                        ep_match = re.search(r'EP\s*(\d+)', ep_label, re.IGNORECASE)
+                        if ep_match:
+                            card_ep_num = int(ep_match.group(1))
                     
-                    # Priority 1: data-schedule-anime-ranges attribute (e.g., "[132,132]")
-                    ranges_str = block.get('data-schedule-anime-ranges', '')
-                    if ranges_str:
-                        range_match = re.search(r'\[(\d+),\s*(\d+)\]', ranges_str)
-                        if range_match:
-                            current_progress = int(range_match.group(1))
-                            progress_target = int(range_match.group(2))
+                    if card_ep_num == 0:
+                        ranges_str = block.get('data-schedule-anime-ranges', '')
+                        if ranges_str:
+                            range_match = re.search(r'\[(\d+),\s*(\d+)\]', ranges_str)
+                            if range_match:
+                                card_ep_num = int(range_match.group(2))
                     
-                    # Priority 2: Progress button title (e.g., "Progress to 132")
-                    if current_progress == 0:
-                        progress_btn = block.find('button', title=lambda t: t and t.startswith('Progress to'))
-                        if progress_btn:
-                            prog_match = re.search(r'Progress to (\d+)', progress_btn.get('title', ''))
-                            if prog_match:
-                                progress_target = int(prog_match.group(1))
-                                current_progress = progress_target - 1  # User has watched up to N-1
+                    user_target_ep = 0 # The episode the user needs to watch NEXT
+                    progress_btn = block.find('button', title=lambda t: t and t.startswith('Progress to'))
+                    if progress_btn:
+                        prog_match = re.search(r'Progress to (\d+)', progress_btn.get('title', ''))
+                        if prog_match:
+                            user_target_ep = int(prog_match.group(1))
 
-                    has_progress = current_progress > 0 or progress_target > 0
+                    # Determine if the currently scheduled episode is considered "watched"
+                    is_watched = False
+                    
+                    if library_status == "completed":
+                        is_watched = True
+                    else:
+                        for btn in block.find_all('button', class_='lc-tt-progress-button'):
+                            classes = " ".join(btn.get('class', [])).lower()
+                            data_val = btn.get('data-mark-icon-viewer-status-value', '').lower()
+                            use_tag = btn.find('use')
+                            href_val = use_tag.get('href', '').lower() if use_tag else ''
+                            
+                            # LiveChart dynamically injects 'active' class or 'watched' explicitly when progressing
+                            if 'active' in classes or data_val == 'watched' or 'watched' in href_val:
+                                is_watched = True
+                                break
+                                
+                        # Fallback for alternative SVGs explicitly marked watched
+                        if not is_watched:
+                            for use_tag in block.find_all('use'):
+                                href = use_tag.get('href', '').lower()
+                                if 'mark:watched' in href or 'mark-watched' in href:
+                                    is_watched = True
+                                    break
+
+                    has_progress = user_target_ep > 0 or not is_watched
+                    current_progress = user_target_ep - 1 if user_target_ep > 0 else 0
+                    progress_target = user_target_ep
 
                     if title != 'Unknown Title' and time_str != 'TBA':
                         anime_list.append({
@@ -337,6 +364,7 @@ def get_livechart_data(date_str, browser_type="firefox"):
                             "timestamp": timestamp,
                             "animeLink": anime_link,
                             "libraryStatus": library_status,
+                            "isWatched": is_watched,
                             "hasProgress": has_progress,
                             "currentProgress": current_progress,
                             "progressTarget": progress_target
