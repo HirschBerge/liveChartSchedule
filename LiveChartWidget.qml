@@ -16,7 +16,24 @@ PluginComponent {
     // Configurable properties via pluginData (from Settings)
     property string timeFormat: pluginData.timeFormat || "12h"
     property bool showSeconds: pluginData.showSeconds !== undefined ? pluginData.showSeconds : false
-    property int updateIntervalSeconds: pluginData.updateInterval || 3600
+    property int updateIntervalMs: {
+        let val = parseFloat(pluginData.updateIntervalValue || "1");
+        let unit = pluginData.updateIntervalUnit || "h";
+        
+        // Logical fallback for legacy settings
+        if (!pluginData.updateIntervalValue && pluginData.updateInterval) {
+            val = parseInt(pluginData.updateInterval);
+            unit = "s";
+        }
+
+        switch (unit) {
+            case "ms": return val;
+            case "s":  return val * 1000;
+            case "m":  return val * 60000;
+            case "h":  return val * 3600000;
+            default:   return 3600000;
+        }
+    }
     property string browserName: pluginData.browser || "firefox"
     
     // Click Action Settings
@@ -24,7 +41,7 @@ PluginComponent {
     property string coverClickAction: pluginData.coverClickAction || "anime_entry"
     property string watchStreamClickAction: pluginData.watchStreamClickAction || "watch_page"
     property string livechartIconClickAction: pluginData.livechartIconClickAction || "schedule"
-    property string dankbarDisplay: pluginData.dankbarDisplay || "total_count"
+    property string dankbarPill: pluginData.dankbarPill || "total_count"
     property int dankbarLimit: pluginData.dankbarLimit !== undefined ? parseInt(pluginData.dankbarLimit) : 1
     property string dynamicDisplayMode: "next" // toggles between next and recent
     property int daysToShow: parseInt(pluginData.daysToShow || "7", 10)
@@ -54,22 +71,20 @@ PluginComponent {
             root.triggerFetch("Browser changed, refetching...");
         }
 
-        // Update update interval
-        let newInterval = parseInt(pluginData.updateInterval || "3600", 10);
-        if (newInterval !== root.updateIntervalSeconds) {
-            root.updateIntervalSeconds = newInterval;
-            updateTimer.restart();
-        }
-        
-        // Update other visual settings
+        // Other visual settings (timeFormat, showSeconds, etc.) update via bindings or direct assignment
         root.timeFormat = pluginData.timeFormat || "12h";
         root.showSeconds = pluginData.showSeconds !== undefined ? pluginData.showSeconds : false;
         root.cardClickAction = pluginData.cardClickAction || "anime_entry";
         root.coverClickAction = pluginData.coverClickAction || "anime_entry";
         root.watchStreamClickAction = pluginData.watchStreamClickAction || "watch_page";
         root.livechartIconClickAction = pluginData.livechartIconClickAction || "schedule";
-        root.dankbarDisplay = pluginData.dankbarDisplay || "total_count";
+        root.dankbarPill = pluginData.dankbarPill || "total_count";
         root.dankbarLimit = pluginData.dankbarLimit !== undefined ? parseInt(pluginData.dankbarLimit) : 1;
+    }
+
+    onUpdateIntervalMsChanged: {
+        console.log("[LiveChart] Update interval changed to", root.updateIntervalMs, "ms");
+        updateTimer.restart();
     }
 
     // Helper for PWA support
@@ -172,7 +187,7 @@ PluginComponent {
 
     Timer {
         id: updateTimer
-        interval: root.updateIntervalSeconds * 1000
+        interval: Math.max(100, root.updateIntervalMs)
         running: true
         repeat: true
         triggeredOnStart: true
@@ -185,7 +200,7 @@ PluginComponent {
     Timer {
         id: dynamicDisplayTimer
         interval: 10000 // 10 seconds
-        running: root.dankbarDisplay === "dynamic"
+        running: root.dankbarPill === "dynamic"
         repeat: true
         onTriggered: root.dynamicDisplayMode = (root.dynamicDisplayMode === "next" ? "recent" : "next")
     }
@@ -193,23 +208,26 @@ PluginComponent {
     function getDankbarText(isVertical) {
         if (root.isLoading) return isVertical ? "..." : "Fetching...";
         
-        if (root.dankbarDisplay === "total_count") {
-            let count = 0;
-            for (let i = 0; i < root.scheduleData.length; i++) {
-                count += root.scheduleData[i].shows.length;
+        let todayCount = 0;
+        for (let i = 0; i < root.fullScheduleData.length; i++) {
+            if (root.fullScheduleData[i].day === root.currentDayName) {
+                todayCount = root.fullScheduleData[i].shows.length;
+                break;
             }
-            return isVertical ? count.toString() : `Anime (${count})`;
+        }
+
+        if (isVertical) return todayCount.toString();
+        
+        if (root.dankbarPill === "total_count") {
+            let totalCount = 0;
+            for (let i = 0; i < root.scheduleData.length; i++) {
+                totalCount += root.scheduleData[i].shows.length;
+            }
+            return `Anime (${totalCount})`;
         }
         
-        if (root.dankbarDisplay === "today_count") {
-            let count = 0;
-            for (let i = 0; i < root.fullScheduleData.length; i++) {
-                if (root.fullScheduleData[i].day === root.currentDayName) {
-                    count = root.fullScheduleData[i].shows.length;
-                    break;
-                }
-            }
-            return isVertical ? count.toString() : `Today (${count})`;
+        if (root.dankbarPill === "today_count") {
+            return `Today (${todayCount})`;
         }
 
         let nextShows = [];
@@ -247,12 +265,11 @@ PluginComponent {
             return res.trim();
         }
 
-        let mode = root.dankbarDisplay;
+        let mode = root.dankbarPill;
         if (mode === "dynamic") mode = (root.dynamicDisplayMode === "next" ? "next_airing" : "recently_aired");
 
         if (mode === "next_airing") {
-            if (nextShows.length === 0) return isVertical ? "?" : "None Next";
-            if (isVertical) return nextShows[0].show.ep || "?";
+            if (nextShows.length === 0) return "None Next";
             
             let displays = [];
             for (let i = 0; i < Math.min(nextShows.length, root.dankbarLimit); i++) {
@@ -264,8 +281,7 @@ PluginComponent {
         }
         
         if (mode === "recently_aired") {
-            if (recentShows.length === 0) return isVertical ? "?" : "None Recent";
-            if (isVertical) return recentShows[0].show.ep || "?";
+            if (recentShows.length === 0) return "None Recent";
             
             let displays = [];
             for (let i = 0; i < Math.min(recentShows.length, root.dankbarLimit); i++) {
@@ -276,7 +292,7 @@ PluginComponent {
             return displays.join("  •  ");
         }
 
-        return isVertical ? "?" : "Anime";
+        return "Anime";
     }
 
     Timer {
@@ -333,11 +349,25 @@ PluginComponent {
     horizontalBarPill: Component {
         Row {
             spacing: Theme.spacingS
-            DankIcon { 
-                name: "calendar_month"
-                size: root.iconSize
-                color: Theme.widgetIconColor
-                anchors.verticalCenter: parent.verticalCenter 
+            Item {
+                width: root.iconSize
+                height: root.iconSize
+                anchors.verticalCenter: parent.verticalCenter
+                
+                Image {
+                    id: horizLiveChartLogo
+                    source: "LiveChart.svg"
+                    anchors.fill: parent
+                    sourceSize: Qt.size(64, 64)
+                    smooth: true
+                    visible: false
+                }
+                
+                ColorOverlay {
+                    anchors.fill: horizLiveChartLogo
+                    source: horizLiveChartLogo
+                    color: Theme.widgetTextColor
+                }
             }
             Rectangle {
                 id: textContainer
@@ -400,12 +430,26 @@ PluginComponent {
 
     verticalBarPill: Component {
         Column {
-            spacing: 1
-            DankIcon {
-                name: "calendar_month"
-                size: root.iconSize
-                color: Theme.widgetIconColor
+            spacing: 4
+            Item {
+                width: root.iconSize
+                height: root.iconSize
                 anchors.horizontalCenter: parent.horizontalCenter
+                
+                Image {
+                    id: vertLiveChartLogo
+                    source: "LiveChart.svg"
+                    anchors.fill: parent
+                    sourceSize: Qt.size(64, 64)
+                    smooth: true
+                    visible: false
+                }
+                
+                ColorOverlay {
+                    anchors.fill: vertLiveChartLogo
+                    source: vertLiveChartLogo
+                    color: Theme.widgetTextColor
+                }
             }
             StyledText {
                 text: root.getDankbarText(true)
@@ -482,8 +526,7 @@ PluginComponent {
                                 source: "https://www.google.com/s2/favicons?domain=livechart.me&sz=64"
                                 width: 24
                                 height: 24
-                                sourceSize.width: 24
-                                sourceSize.height: 24
+                                sourceSize: Qt.size(24, 24)
                                 anchors.centerIn: parent
                                 fillMode: Image.PreserveAspectFit
                             }
@@ -519,9 +562,9 @@ PluginComponent {
                         }
                     }
 
-                    // Custom Navigation Group explicitly mirroring exact DankButtonGroup 
-                    // dimensions, spacings, and physics, with targeted highlighting and animation.
+                    // Custom Navigation Group (Header Centered Version - Hidden on small layouts)
                     Row {
+                        visible: root.daysToShow > 2
                         anchors.centerIn: parent
                         spacing: Theme.spacingXS
                         
@@ -648,43 +691,180 @@ PluginComponent {
                             color: Theme.primary
                             anchors.centerIn: parent
 
+                            // Continuous rotation when loading
                             RotationAnimation {
-                                id: rotateEnter
+                                id: loadingRotation
                                 target: refreshIcon
                                 property: "rotation"
                                 from: 0
                                 to: 360
-                                duration: 600
+                                duration: 1200
+                                loops: Animation.Infinite
+                                running: root.isLoading
+                            }
+
+                            // Discrete rotation on hover
+                            RotationAnimation {
+                                id: hoverRotation
+                                target: refreshIcon
+                                property: "rotation"
+                                from: 0
+                                to: 360
+                                duration: 2400
                                 easing.type: Easing.OutQuart
                             }
 
+                            // Rotation back to zero when hover ends
                             RotationAnimation {
-                                id: rotateLeave
+                                id: resetRotation
                                 target: refreshIcon
                                 property: "rotation"
                                 from: 360
                                 to: 0
-                                duration: 600
+                                duration: 1000
                                 easing.type: Easing.OutQuart
                             }
                         }
 
-                        // Trigger animations using DankButton's hovered state
                         onHoveredChanged: {
+                            if (root.isLoading) return;
                             if (hovered) {
-                                rotateLeave.stop();
-                                rotateEnter.start();
+                                resetRotation.stop();
+                                hoverRotation.start();
                             } else {
-                                rotateEnter.stop();
-                                rotateLeave.start();
+                                hoverRotation.stop();
+                                resetRotation.start();
                             }
                         }
 
                         onClicked: {
+                            if (root.isLoading) return;
                             root.isLoading = true;
+                            // Ensure animations reset for loading state
+                            hoverRotation.stop();
+                            resetRotation.stop();
+                            refreshIcon.rotation = 0;
+                            
                             root.fullScheduleData = []; // Clear current data instantly to show skeleton
                             root.updateScheduleData();
                             root.triggerFetch("Fetching schedule...");
+                        }
+                    }
+                }
+
+                // Dedicated Navigation Row (Standalone version for small layouts)
+                // This appears between the header card and the schedule content when 1 or 2 days are shown.
+                Rectangle {
+                    visible: root.daysToShow <= 2
+                    width: parent.width
+                    height: 56
+                    radius: Theme.cornerRadius * 1.5
+                    color: Theme.withAlpha(Theme.surfaceContainer, 0.6)
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.primary, 0.15)
+                    
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: Theme.spacingXS
+                        
+                        Repeater {
+                            model: [
+                                { text: "<<", action: () => root.triggerFetch(), offset: -7 },
+                                { text: "<", action: () => root.triggerFetch(), offset: -1 },
+                                { text: "Today", isTodayBtn: true, action: () => root.triggerFetch(), offset: 0 },
+                                { text: ">", action: () => root.triggerFetch(), offset: 1 },
+                                { text: ">>", action: () => root.triggerFetch(), offset: 7 }
+                            ]
+                            
+                            Rectangle {
+                                id: navBtnStandalone
+                                property bool isFirst: index === 0
+                                property bool isLast: index === 4
+                                property bool isTodayAtDefault: (modelData.isTodayBtn === true) && (root.startDayOffset === parseInt(pluginData.startDay || "0", 10))
+                                
+                                width: Math.max(btnTextStandalone.implicitWidth + Theme.spacingL * 2, 64) + (isTodayAtDefault ? 4 : 0)
+                                height: 40
+                                
+                                // Pure base color mirroring DankButtonGroup default
+                                color: isTodayAtDefault ? Theme.primary : Theme.surfaceVariant
+                                
+                                topLeftRadius: (isFirst || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                bottomLeftRadius: (isFirst || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                topRightRadius: (isLast || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                bottomRightRadius: (isLast || isTodayAtDefault) ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                
+                                Behavior on width { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on topLeftRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on bottomLeftRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on topRightRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on bottomRightRadius { enabled: true; NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                Behavior on color { ColorAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                                
+                                Rectangle {
+                                    id: stateLayerStandalone
+                                    anchors.fill: parent
+                                    topLeftRadius: parent.topLeftRadius
+                                    bottomLeftRadius: parent.bottomLeftRadius
+                                    topRightRadius: parent.topRightRadius
+                                    bottomRightRadius: parent.bottomRightRadius
+                                    color: {
+                                        if (navHoverStandalone.pressed) return isTodayAtDefault ? Theme.buttonPressed : Theme.surfaceTextHover;
+                                        if (navHoverStandalone.containsMouse) return isTodayAtDefault ? Theme.buttonHover : Theme.surfaceTextHover;
+                                        return "transparent";
+                                    }
+                                    Behavior on color { ColorAnimation { duration: Theme.shorterDuration; easing.type: Theme.standardEasing } }
+                                }
+                                
+                                DankRipple {
+                                    id: navRippleStandalone
+                                    cornerRadius: isFirst || isLast || isTodayAtDefault ? Theme.cornerRadius : Math.min(4, Theme.cornerRadius)
+                                    rippleColor: isTodayAtDefault ? Theme.onPrimary : Theme.surfaceVariantText
+                                }
+                                
+                                Item {
+                                    anchors.fill: parent
+                                    
+                                    StyledText {
+                                        id: btnTextStandalone
+                                        text: modelData.text
+                                        font.pixelSize: Theme.fontSizeMedium
+                                        anchors.centerIn: parent
+                                        color: isTodayAtDefault ? "#FFFFFF" : Theme.surfaceVariantText
+                                        font.weight: isTodayAtDefault ? Font.Medium : Font.Normal
+                                        
+                                        scale: (navHoverStandalone.containsMouse && modelData.isTodayBtn) ? 1.1 : 1.0
+                                        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                                        
+                                        transform: Translate {
+                                            id: iconTranslateStandalone
+                                            x: 0
+                                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                                        }
+                                    }
+                                }
+                                
+                                MouseArea {
+                                    id: navHoverStandalone
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: mouse => navRippleStandalone.trigger(mouse.x, mouse.y)
+                                    onClicked: {
+                                        if (modelData.isTodayBtn) {
+                                            root.startDayOffset = parseInt(pluginData.startDay || "0", 10);
+                                        } else {
+                                            root.startDayOffset += modelData.offset;
+                                        }
+                                    }
+                                    onEntered: {
+                                        if (modelData.text === "<" || modelData.text === "<<") iconTranslateStandalone.x = -4;
+                                        if (modelData.text === ">" || modelData.text === ">>") iconTranslateStandalone.x = 4;
+                                    }
+                                    onExited: {
+                                        iconTranslateStandalone.x = 0;
+                                    }
+                                }
+                            }
                         }
                     }
                 }

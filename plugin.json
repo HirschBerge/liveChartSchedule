@@ -11,7 +11,7 @@
     ],
     "component": "./LiveChartWidget.qml",
     "settings": "./LiveChartSettings.qml",
-    "icon": "calendar_month",
+    "icon": "view_timeline",
     "requires": [
         "python3"
     ],
