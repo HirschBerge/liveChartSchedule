@@ -24,8 +24,53 @@ PluginComponent {
     property string coverClickAction: pluginData.coverClickAction || "anime_entry"
     property string watchStreamClickAction: pluginData.watchStreamClickAction || "watch_page"
     property string livechartIconClickAction: pluginData.livechartIconClickAction || "schedule"
+    property string dankbarDisplay: pluginData.dankbarDisplay || "total_count"
+    property int dankbarLimit: pluginData.dankbarLimit !== undefined ? parseInt(pluginData.dankbarLimit) : 1
+    property string dynamicDisplayMode: "next" // toggles between next and recent
     property int daysToShow: parseInt(pluginData.daysToShow || "7", 10)
     property int startDayOffset: parseInt(pluginData.startDay || "0", 10)
+
+    // Handle settings changes from pluginData
+    onPluginDataChanged: {
+        console.log("[LiveChart] pluginData changed:", JSON.stringify(pluginData));
+        
+        // Update daysToShow and trigger data filter update
+        let newDays = parseInt(pluginData.daysToShow || "7", 10);
+        if (newDays !== root.daysToShow) {
+            root.daysToShow = newDays;
+        }
+
+        // Update startDayOffset which triggers onTargetDateChanged -> triggerFetch
+        let newOffset = parseInt(pluginData.startDay || "0", 10);
+        if (newOffset !== root.startDayOffset) {
+            root.startDayOffset = newOffset;
+        }
+
+        // If browser changed, we must refetch even if date didn't change
+        let newBrowser = pluginData.browser || "firefox";
+        if (newBrowser !== root.browserName) {
+            root.browserName = newBrowser;
+            root.isLoading = true;
+            root.triggerFetch("Browser changed, refetching...");
+        }
+
+        // Update update interval
+        let newInterval = parseInt(pluginData.updateInterval || "3600", 10);
+        if (newInterval !== root.updateIntervalSeconds) {
+            root.updateIntervalSeconds = newInterval;
+            updateTimer.restart();
+        }
+        
+        // Update other visual settings
+        root.timeFormat = pluginData.timeFormat || "12h";
+        root.showSeconds = pluginData.showSeconds !== undefined ? pluginData.showSeconds : false;
+        root.cardClickAction = pluginData.cardClickAction || "anime_entry";
+        root.coverClickAction = pluginData.coverClickAction || "anime_entry";
+        root.watchStreamClickAction = pluginData.watchStreamClickAction || "watch_page";
+        root.livechartIconClickAction = pluginData.livechartIconClickAction || "schedule";
+        root.dankbarDisplay = pluginData.dankbarDisplay || "total_count";
+        root.dankbarLimit = pluginData.dankbarLimit !== undefined ? parseInt(pluginData.dankbarLimit) : 1;
+    }
 
     // Helper for PWA support
     Process {
@@ -138,6 +183,103 @@ PluginComponent {
     }
 
     Timer {
+        id: dynamicDisplayTimer
+        interval: 10000 // 10 seconds
+        running: root.dankbarDisplay === "dynamic"
+        repeat: true
+        onTriggered: root.dynamicDisplayMode = (root.dynamicDisplayMode === "next" ? "recent" : "next")
+    }
+
+    function getDankbarText(isVertical) {
+        if (root.isLoading) return isVertical ? "..." : "Fetching...";
+        
+        if (root.dankbarDisplay === "total_count") {
+            let count = 0;
+            for (let i = 0; i < root.scheduleData.length; i++) {
+                count += root.scheduleData[i].shows.length;
+            }
+            return isVertical ? count.toString() : `Anime (${count})`;
+        }
+        
+        if (root.dankbarDisplay === "today_count") {
+            let count = 0;
+            for (let i = 0; i < root.fullScheduleData.length; i++) {
+                if (root.fullScheduleData[i].day === root.currentDayName) {
+                    count = root.fullScheduleData[i].shows.length;
+                    break;
+                }
+            }
+            return isVertical ? count.toString() : `Today (${count})`;
+        }
+
+        let nextShows = [];
+        let recentShows = [];
+
+        for (let i = 0; i < root.fullScheduleData.length; i++) {
+            let day = root.fullScheduleData[i];
+            for (let j = 0; j < day.shows.length; j++) {
+                let show = day.shows[j];
+                let ts = parseFloat(show.timestamp);
+                let diff = ts - root.currentTime;
+                
+                if (diff > 0) {
+                    nextShows.push({ show: show, diff: diff });
+                } else {
+                    recentShows.push({ show: show, diff: Math.abs(diff) });
+                }
+            }
+        }
+
+        nextShows.sort((a, b) => a.diff - b.diff);
+        recentShows.sort((a, b) => a.diff - b.diff);
+
+        function formatTimeDiff(diff) {
+            let absDiff = Math.abs(diff);
+            let d = Math.floor(absDiff / 86400);
+            let h = Math.floor((absDiff % 86400) / 3600);
+            let m = Math.floor((absDiff % 3600) / 60);
+
+            let res = "";
+            if (d > 0) res += d + "d ";
+            if (h > 0) res += h + "h ";
+            if (m > 0 || (d === 0 && h === 0)) res += m + "m";
+            
+            return res.trim();
+        }
+
+        let mode = root.dankbarDisplay;
+        if (mode === "dynamic") mode = (root.dynamicDisplayMode === "next" ? "next_airing" : "recently_aired");
+
+        if (mode === "next_airing") {
+            if (nextShows.length === 0) return isVertical ? "?" : "None Next";
+            if (isVertical) return nextShows[0].show.ep || "?";
+            
+            let displays = [];
+            for (let i = 0; i < Math.min(nextShows.length, root.dankbarLimit); i++) {
+                let ns = nextShows[i];
+                let timeStr = formatTimeDiff(ns.diff);
+                displays.push(`${ns.show.title} ${ns.show.ep ? "Ep " + ns.show.ep : ""} (in ${timeStr})`);
+            }
+            return displays.join("  •  ");
+        }
+        
+        if (mode === "recently_aired") {
+            if (recentShows.length === 0) return isVertical ? "?" : "None Recent";
+            if (isVertical) return recentShows[0].show.ep || "?";
+            
+            let displays = [];
+            for (let i = 0; i < Math.min(recentShows.length, root.dankbarLimit); i++) {
+                let rs = recentShows[i];
+                let timeStr = formatTimeDiff(rs.diff);
+                displays.push(`${rs.show.title} ${rs.show.ep ? "Ep " + rs.show.ep : ""} (${timeStr} ago)`);
+            }
+            return displays.join("  •  ");
+        }
+
+        return isVertical ? "?" : "Anime";
+    }
+
+    Timer {
         id: scrollTimer
         interval: 100
         repeat: false
@@ -197,27 +339,60 @@ PluginComponent {
                 color: Theme.widgetIconColor
                 anchors.verticalCenter: parent.verticalCenter 
             }
-            Item {
+            Rectangle {
+                id: textContainer
                 anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: statusText.paintedWidth
-                implicitHeight: statusText.implicitHeight
-                width: implicitWidth; height: implicitHeight
+                color: "transparent"
+                clip: true
                 
+                // Smoothly animate width changes
+                width: Math.min(statusText.contentWidth, 180)
+                height: 18 // Sufficient for Theme.fontSizeSmall
+                
+                Behavior on width {
+                    NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing }
+                }
+
                 StyledText {
                     id: statusText
-                    anchors.fill: parent
+                    readonly property bool isLong: contentWidth > textContainer.width
+                    property real scrollOffset: 0
+                    
+                    x: isLong ? -scrollOffset : 0
+                    anchors.verticalCenter: parent.verticalCenter
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.widgetTextColor
-                    text: {
-                        if (root.isLoading) return "Fetching...";
-                        let count = 0;
-                        for (let i = 0; i < root.scheduleData.length; i++) {
-                            count += root.scheduleData[i].shows.length;
-                        }
-                        return `Anime (${count})`;
+                    text: root.getDankbarText(false)
+                    wrapMode: Text.NoWrap
+                    
+                    onTextChanged: {
+                        scrollOffset = 0;
+                        scrollAnimation.restart();
                     }
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+
+                    SequentialAnimation {
+                        id: scrollAnimation
+                        running: statusText.isLong && textContainer.visible
+                        loops: Animation.Infinite
+
+                        PauseAnimation { duration: 2000 }
+                        NumberAnimation {
+                            target: statusText
+                            property: "scrollOffset"
+                            from: 0
+                            to: statusText.contentWidth - textContainer.width + 10
+                            duration: Math.max(1000, (statusText.contentWidth - textContainer.width) * 40)
+                            easing.type: Easing.Linear
+                        }
+                        PauseAnimation { duration: 2000 }
+                        NumberAnimation {
+                            target: statusText
+                            property: "scrollOffset"
+                            to: 0
+                            duration: Theme.shortDuration
+                            easing.type: Theme.standardEasing
+                        }
+                    }
                 }
             }
         }
@@ -233,17 +408,14 @@ PluginComponent {
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             StyledText {
-                text: {
-                    if (root.isLoading) return "...";
-                    let count = 0;
-                    for (let i = 0; i < root.scheduleData.length; i++) {
-                        count += root.scheduleData[i].shows.length;
-                    }
-                    return count.toString();
-                }
+                text: root.getDankbarText(true)
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.widgetTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
             }
         }
     }
@@ -417,7 +589,7 @@ PluginComponent {
                                         text: modelData.text
                                         font.pixelSize: Theme.fontSizeMedium
                                         anchors.centerIn: parent
-                                        color: isTodayAtDefault ? Theme.onPrimary : Theme.surfaceVariantText
+                                        color: isTodayAtDefault ? "#FFFFFF" : Theme.surfaceVariantText
                                         font.weight: isTodayAtDefault ? Font.Medium : Font.Normal
                                         
                                         // Tactile scale zoom exclusively for the Today anchor
@@ -537,7 +709,7 @@ PluginComponent {
                             Rectangle {
                                 width: parent.width
                                 height: 40
-                                color: Theme.withAlpha(Theme.surfaceVariant, 0.4)
+                                color: Theme.withAlpha(Theme.surfaceVariantText, 0.15)
                                 radius: Theme.cornerRadius
                             }
                             
@@ -565,9 +737,9 @@ PluginComponent {
                                         width: parent.width - 16 // Accurately reserves 16px scrollbar gutter
                                         height: 190
                                         radius: 20
-                                        color: Theme.withAlpha(Theme.surfaceVariant, 0.2)
+                                        color: Theme.withAlpha(Theme.surfaceVariantText, 0.1)
                                         border.width: 1
-                                        border.color: Theme.withAlpha(Theme.surfaceVariantText, 0.1)
+                                        border.color: Theme.withAlpha(Theme.surfaceVariantText, 0.05)
                                     }
                                 }
                             }

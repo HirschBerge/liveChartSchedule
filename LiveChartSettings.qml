@@ -10,6 +10,34 @@ PluginSettings {
     pluginId: "liveChartSchedule"
 
     SelectionSetting {
+        settingKey: "dankbarDisplay"
+        label: "Dankbar Widget"
+        description: "What information to show in the Dankbar pill."
+        options: [
+            { label: "Total Shows", value: "total_count" },
+            { label: "Today's Shows", value: "today_count" },
+            { label: "Next Airing", value: "next_airing" },
+            { label: "Recently Aired", value: "recently_aired" },
+            { label: "Dynamic (Next/Recent)", value: "dynamic" }
+        ]
+        defaultValue: "total_count"
+    }
+
+    SelectionSetting {
+        settingKey: "dankbarLimit"
+        label: "Dankbar Limit"
+        description: "How many shows to display in Next/Recent modes."
+        options: [
+            { label: "1 Show", value: "1" },
+            { label: "2 Shows", value: "2" },
+            { label: "3 Shows", value: "3" },
+            { label: "4 Shows", value: "4" },
+            { label: "5 Shows", value: "5" }
+        ]
+        defaultValue: "1"
+    }
+
+    SelectionSetting {
         settingKey: "browser"
         label: "Browser Session"
         description: "Which browser's cookies to use for authentication and filtering. (Make sure you are logged into livechart.me)"
