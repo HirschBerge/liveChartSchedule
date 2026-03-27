@@ -73,9 +73,4 @@ Found a bug or have a feature request? Let’s make this better together.
 
 ---
 
-## 📜 License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
 *Created with ❤️ for the Anime Community.*
