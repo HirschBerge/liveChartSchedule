@@ -4,14 +4,14 @@
     "description": "Displays LiveChart anime schedule data pulled from a local browser session.",
     "category": "utility",
     "version": "1.0.0",
-    "author": "Antigravity",
+    "author": "JD",
     "type": "widget",
     "capabilities": [
         "dankbar-widget"
     ],
     "component": "./LiveChartWidget.qml",
     "settings": "./LiveChartSettings.qml",
-    "icon": "calendar_month",
+    "icon": "view_timeline",
     "requires": [
         "python3"
     ],
