@@ -4,17 +4,26 @@
     "description": "Displays LiveChart anime schedule data pulled from a local browser session.",
     "category": "utility",
     "version": "1.0.0",
-    "author": "JD",
+    "author": "JDKamalakar",
     "type": "widget",
+    "component": "./LiveChartWidget.qml",
+    "settings": "./LiveChartSettings.qml",
     "capabilities": [
         "dankbar-widget"
     ],
-    "component": "./LiveChartWidget.qml",
-    "settings": "./LiveChartSettings.qml",
+    "repo": "https://github.com/JDKamalakar/DMS-LiveChart.me",
+    "compositors": [
+        "any"
+    ],
+    "distro": [
+        "any"
+    ],
     "icon": "view_timeline",
-    "requires": [
+    "dependencies": [
+        "dms"
         "python3"
     ],
+    "screenshot": "https://github.com/JDKamalakar/DMS-LiveChart.me/blob/main/Dank-Bar_Widget.png",
     "permissions": [
         "settings_read",
         "settings_write",
