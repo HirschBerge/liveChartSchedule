@@ -20,7 +20,8 @@
     ],
     "icon": "view_timeline",
     "dependencies": [
-        "dms""python3"
+        "dms",
+        "python3"
     ],
     "screenshot": "https://github.com/JDKamalakar/DMS-LiveChart.me/blob/main/assets/Dank-Bar_Widget.png",
     "permissions": [
