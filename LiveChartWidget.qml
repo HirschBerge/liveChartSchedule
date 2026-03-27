@@ -49,8 +49,6 @@ PluginComponent {
 
     // Handle settings changes from pluginData
     onPluginDataChanged: {
-        console.log("[LiveChart] pluginData changed:", JSON.stringify(pluginData));
-        
         // Update daysToShow and trigger data filter update
         let newDays = parseInt(pluginData.daysToShow || "7", 10);
         if (newDays !== root.daysToShow) {
@@ -83,7 +81,6 @@ PluginComponent {
     }
 
     onUpdateIntervalMsChanged: {
-        console.log("[LiveChart] Update interval changed to", root.updateIntervalMs, "ms");
         updateTimer.restart();
     }
 
@@ -94,10 +91,8 @@ PluginComponent {
 
     function openUrl(url) {
         if (!url || url === "") {
-            console.log("[LiveChart] openUrl called with empty URL");
             return;
         }
-        console.log("[LiveChart] Opening URL:", url);
         Qt.openUrlExternally(url);
     }
 
