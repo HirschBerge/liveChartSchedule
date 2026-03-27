@@ -16,7 +16,7 @@ Settings UI
 
 ![Settings UI](image-1.png)
 
-Sl-Out UI
+Slide-Out UI
 Work In Progress!!!
 
-Report Bugs Or Issues Here: [GitHub Issues Page](https://github.com/JDKamalakar/DMS-LiveChart.me/issues)
+Report Bugs Or Issues Here: [GitHub Issues](https://github.com/JDKamalakar/DMS-LiveChart.me/issues/new/choose)
