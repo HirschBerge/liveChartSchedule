@@ -1,22 +1,82 @@
-# DMS-LiveChart.me
+# <img width="24" height="24" alt="image" src="https://github.com/user-attachments/assets/436d9ca0-cf9d-49ca-87a1-afd8e66d6de0" /> DMS-LiveChart.me
 
-This Is Implementation Of LiveChart.me Dankbar Widget &amp; Slide-out For Dank Material Shell.
+[![DMS Version](https://img.shields.io/badge/DMS-Compatible-purple.svg)](https://github.com/Dank-Material-Shell)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/JDKamalakar/DMS-LiveChart.me/graphs/commit-activity)
 
-Note Some Things Are Not Possible As There Is No Public Facing API Available For LiveChart.me.
+An elegant implementation of the **LiveChart.me** Dankbar widget and slide-out panel, specifically designed for the **Dank Material Shell** (DMS) environment.
 
-POP-UP UI
+Stay updated on your favorite seasonal anime directly from your desktop with a seamless, material-inspired UI.
 
-![Pop-Up UI](1774584921384966144.png)
+> [!IMPORTANT]  
+> **Note:** Some features are limited or experimental as there is currently no public-facing API available for LiveChart.me.
 
-Dankbar UI
+---
 
-![Dankbar UI](image.png)
+## ✨ Features
 
-Settings UI
+* **Real-time Tracking:** Integration of LiveChart.me schedules into your shell.
+* **Dankbar Support:** Clean, minimal status bar indicators for upcoming episodes.
+* **Pop-up Previews:** Quick-glance information without opening a full browser.
+* **Customizable UI:** Dedicated settings panel to tweak the appearance to match your setup.
 
-![Settings UI](image-1.png)
+---
 
-Slide-Out UI
-Work In Progress!!!
+## 📸 Interface Preview
 
-Report Bugs Or Issues Here: [GitHub Issues](https://github.com/JDKamalakar/DMS-LiveChart.me/issues/new/choose)
+### 🖥️ Main Display
+| Pop-Up UI |
+| :--- |
+| <img width="2445" height="766" alt="Pop-UI" src="https://github.com/user-attachments/assets/08455de6-21c4-4ae8-aef9-fa1503b78fcb" /> |
+
+
+| Dankbar UI |
+| :--- |
+| <img width="272" height="57" alt="Dankbar UI" src="https://github.com/user-attachments/assets/3ad2c5f2-ec25-4856-9b2e-63cde99eba5c" /> |
+
+
+
+
+| Slide-Out UI |
+| :--- |
+| **🚧 Work In Progress!** |
+ 
+### ⚙️ Configuration
+| Settings UI |
+| :--- |
+| <img width="584" height="1236" alt="Settings UI" src="https://github.com/user-attachments/assets/17707d6f-e13f-4766-a852-3ab6e2d34226" />
+ |
+
+---
+
+## 🛠️ Installation
+
+### 🚀 Recommended: DMS Plugin Manager
+The easiest way to install and stay updated:
+1. Open your **DMS Settings**.
+2. Navigate to the **Plugin Manager** tab.
+3. Search for `DMS-LiveChart.me` and click **Install**.
+4. Alternatively, browse the [Dank Linux Plugin Gallery](https://danklinux.com/plugins#/).
+
+### 🛠️ Manual Installation
+For developers or users who want the latest edge builds:
+1. Clone this repository into your DMS extensions/plugins folder:
+   ```bash
+   git clone [https://github.com/JDKamalakar/DMS-LiveChart.me.git](https://github.com/JDKamalakar/DMS-LiveChart.me.git)
+
+---
+
+## 🐛 Feedback & Contributions
+
+Found a bug or have a feature request? Let’s make this better together.
+
+* **Report Issues:** [GitHub Issues](https://github.com/JDKamalakar/DMS-LiveChart.me/issues/new/choose)
+* **Contributions:** Pull requests are welcome! Please ensure your code follows the shell's design guidelines.
+
+---
+
+## 📜 License
+
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
+---
+*Created with ❤️ for the Anime Community.*
