@@ -73,10 +73,4 @@ Found a bug or have a feature request? Let’s make this better together.
 * **Contributions:** Pull requests are welcome! Please ensure your code follows the shell's design guidelines.
 
 ---
-
-## 📜 License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
 *Created with ❤️ for the Anime Community.*
