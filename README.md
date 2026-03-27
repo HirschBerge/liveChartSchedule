@@ -74,3 +74,11 @@ Found a bug or have a feature request? Let’s make this better together.
 ---
 
 *Created with ❤️ for the Anime Community.*
+
+## 📜 License
+
+Part of DankMaterialShell. Check the main repository for license information.
+
+## 🤝 Credits
+
+Built for [DankMaterialShell](https://github.com/DankMaterialShell)
