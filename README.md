@@ -43,8 +43,7 @@ Stay updated on your favorite seasonal anime directly from your desktop with a s
 ### ⚙️ Configuration
 | Settings UI |
 | :--- |
-| <img width="584" height="1236" alt="Settings UI" src="https://github.com/user-attachments/assets/17707d6f-e13f-4766-a852-3ab6e2d34226" />
- |
+| <img width="584" height="1236" alt="Settings UI" src="https://github.com/user-attachments/assets/17707d6f-e13f-4766-a852-3ab6e2d34226" />|
 
 ---
 
