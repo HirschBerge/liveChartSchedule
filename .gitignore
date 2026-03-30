@@ -1,0 +1,12 @@
+# LiveChart Plugin Git Ignore
+cache/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.tmp
+node_modules/
+dist/
+build/
