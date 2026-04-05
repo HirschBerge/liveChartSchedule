@@ -2,7 +2,7 @@
     "id": "liveChartSchedule",
     "name": "LiveChart Schedule",
     "description": "Displays LiveChart anime schedule data pulled from a local browser session.",
-    "category": "utility",
+    "category": "utilities",
     "version": "1.0.0",
     "author": "JDKamalakar",
     "type": "widget",
@@ -23,7 +23,7 @@
         "dms",
         "python3"
     ],
-    "screenshot": "https://github.com/JDKamalakar/DMS-LiveChart.me/blob/main/assets/Dank-Bar_Widget.png",
+    "screenshot": "https://github.com/JDKamalakar/DMS-LiveChart.me/blob/main/assets/POP-Up_UI.png?raw=true",
     "permissions": [
         "settings_read",
         "settings_write",
