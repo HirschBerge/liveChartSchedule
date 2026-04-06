@@ -21,7 +21,8 @@
     ],
     "dependencies": [
         "dms",
-        "python3""browser_cookie3"
+        "python3",
+        "browser_cookie3"
     ],
     "screenshot": "https://raw.githubusercontent.com/JDKamalakar/DMS-LiveChart.me/refs/heads/main/assets/POP-Up_UI.png",
     "permissions": [
