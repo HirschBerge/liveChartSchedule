@@ -351,7 +351,7 @@ PluginComponent {
                 
                 Image {
                     id: horizLiveChartLogo
-                    source: "LiveChart.svg"
+                    source: "assets/LiveChart.svg"
                     anchors.fill: parent
                     sourceSize: Qt.size(64, 64)
                     smooth: true
@@ -433,7 +433,7 @@ PluginComponent {
                 
                 Image {
                     id: vertLiveChartLogo
-                    source: "LiveChart.svg"
+                    source: "assets/LiveChart.svg"
                     anchors.fill: parent
                     sourceSize: Qt.size(64, 64)
                     smooth: true
