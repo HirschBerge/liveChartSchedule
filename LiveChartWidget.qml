@@ -351,7 +351,7 @@ PluginComponent {
                 
                 Image {
                     id: horizLiveChartLogo
-                    source: "LiveChart.svg"
+                    source: "assets/LiveChart.svg"
                     anchors.fill: parent
                     sourceSize: Qt.size(64, 64)
                     smooth: true
@@ -433,7 +433,7 @@ PluginComponent {
                 
                 Image {
                     id: vertLiveChartLogo
-                    source: "LiveChart.svg"
+                    source: "assets/LiveChart.svg"
                     anchors.fill: parent
                     sourceSize: Qt.size(64, 64)
                     smooth: true
@@ -627,7 +627,7 @@ PluginComponent {
                                         text: modelData.text
                                         font.pixelSize: Theme.fontSizeMedium
                                         anchors.centerIn: parent
-                                        color: isTodayAtDefault ? "#FFFFFF" : Theme.surfaceVariantText
+                                        color: isTodayAtDefault ? Theme.surfaceVariant : Theme.surfaceVariantText
                                         font.weight: isTodayAtDefault ? Font.Medium : Font.Normal
                                         
                                         // Tactile scale zoom exclusively for the Today anchor
@@ -683,7 +683,7 @@ PluginComponent {
                             id: refreshIcon
                             name: "refresh"
                             size: 22
-                            color: Theme.primary
+                            color: Theme.surfaceVariant
                             anchors.centerIn: parent
 
                             // Continuous rotation when loading
