@@ -128,7 +128,7 @@ def _cookie_worker(browser_type, result_file):
         with open(result_file, 'w') as f:
             json.dump({"success": False, "error": str(e)}, f)
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+CACHE_DIR = os.path.join("/tmp", "liveChartSchedule", "cache")
 
 def download_image(url, opener):
     if not url:
